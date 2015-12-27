@@ -1,0 +1,89 @@
+---
+title: "Practical Machine Learning Project"
+output: html_document
+---
+
+```{r global.options,eval=TRUE,echo=TRUE,cache=TRUE}
+knitr::opts_chunk$set(fig.width=6, fig.height=3, fig.path='Figs/') 
+```
+
+## Introduction
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it.   In this project, our goal is to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. 
+
+## Download Packages and Read Data
+```{r}
+library(caret)
+library(randomForest)
+library(rpart)
+library(rpart.plot)
+train <- read.csv("pml-training.csv")
+test <- read.csv ("pml-testing.csv")
+```
+## Data Preparation and Cleaning
+The train data has 160 variables and 19,622 cases.
+We split the train data set into a training set and test set with 75% for training and 25% for testing.
+```{r}
+trainingIndex <- createDataPartition(train$classe,list=FALSE,p=0.75)
+trainset <- train[trainingIndex, ]
+testset <- train[-trainingIndex, ]
+dim(train)
+dim(test)
+```
+The training set has 160 variables and 14,718 cases, while the test set has 160 variables and 4,904 cases. 
+## Data Cleaning
+In the first step, we remove observations with missing values. This brings down the number of variables to 93.
+```{r}
+trainset <- trainset[, colSums(is.na(trainset))==0]
+testset <- testset[, colSums(is.na(testset))==0]
+```
+In the second step, we remove observations with near zero values.This brings down the number of variables to 59.
+```{r}
+nzv<-nearZeroVar(trainset)
+trainset <- trainset[-nzv]
+testset <- testset[-nzv]
+```
+In the next step, we remove the first six columns which will have no impact on our prediction model.This brings down the number of variables to 53.
+```{r}
+trainset <- trainset[, -(1:6)]
+testset <- testset[, -(1:6)]
+```
+## Data Model
+We use the random forest method with 5-fold cross-validation.
+```{r}
+set.seed(12345)
+controlRf <- trainControl(method="cv",5)
+modelfit <- train(classe ~.,data=trainset,method="rf",trControl=controlRf,ntree=200)
+modelfit
+```
+We plot the error rate of prediction for the 200 trees.  
+```{r}
+plot(modelfit$finalModel,main="Error rate of prediction of activity for 200 RF trees")
+```
+We then estimate the performance of the model on the validation data set.
+```{r}
+predictRF <- predict(modelfit,testset)
+confusionMatrix(testset$classe,predictRF)
+
+accuracy <- postResample(predictRF, testset$classe)
+accuracy
+
+oose <- 1 - as.numeric(confusionMatrix(testset$classe, predictRF)$overall[1])
+oose
+```
+The estimated accuracy of the model is 99.47%  and the estimated out-of-sample error is 0.53%.
+We now plot the decision tree.
+```{r}
+treeplot <- rpart(classe ~ ., data=trainset, method="class")
+prp(treeplot)
+```
+
+
+
+## Predicting with the test data
+We apply this model to the test data we had downloaded earlier.
+```{r}
+result <- predict(modelfit, test[, -length(names(test))])
+result
+```
+
+
